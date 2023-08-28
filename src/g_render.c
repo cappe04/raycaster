@@ -21,6 +21,18 @@ typedef struct s_texture_map{
     double y_step;
 } t_texture_map;
 
+static void draw_pixel(int* pixel_buffer, int x, int y, t_shader shader, 
+                       t_texture_map* tex_map, t_loaded_texture* tex_ptr);
+
+static void draw_vline(int* pixel_buffer, int x, int y1, int y2, t_shader shader, 
+                       t_texture_map* texmap, t_loaded_texture* tex_ptr);
+
+static t_texture_map gen_texmap(t_loaded_texture* tex_ptr, vec2 ray, t_rayface facing, 
+                                bool is_vertical, double wall_height, double y_offset);
+
+static t_shader shade(t_material* mat, double dist, bool is_wall, bool is_vertical);
+
+
 t_rayhit raycast(vec2 sender, vec2_i index, double angle, 
                  t_level* level, t_material** mat_register){
     t_raysubit subhit_h; t_raysubit subhit_v;
@@ -125,66 +137,6 @@ t_rayhit raycast(vec2 sender, vec2_i index, double angle,
     }
 }
 
-static t_texture_map gen_texmap(t_loaded_texture* tex_ptr, vec2 ray, t_rayface facing, 
-                                bool is_vertical, double wall_height, double y_offset){
-    t_texture_map texmap;
-    texmap.x = (int)(tex_ptr->width * ((int)(is_vertical ? ray.y: ray.x) % G_BLOCK_SIZE) / G_BLOCK_SIZE);
-    
-    if((facing.down && !is_vertical) || (facing.left && is_vertical))
-        texmap.x = tex_ptr->width-1 - texmap.x;
-    
-    texmap.y_step = (double)tex_ptr->height / wall_height;
-    texmap.y = y_offset*texmap.y_step;
-    
-    return texmap;
-};
-
-static void increment_texmap(t_texture_map* texmap){
-    texmap->y += texmap->y_step;
-}
-
-static t_shader shade(t_material* mat, double dist, bool is_wall, bool is_vertical){
-    // double fog_effect = 1 - (MIN(dist*dist/G_BLOCK_SIZE, G_FOG_DIST)) / G_FOG_DIST;
-    
-    t_shader shader = { { 0, 0, 0, 255 }, 1 };
-    // shader.scale = fog_effect;
-    
-    if(is_wall){
-        shader.color.r = mat->highlight*is_vertical;
-        shader.color.g = mat->highlight*is_vertical;
-        shader.color.b = mat->highlight*is_vertical;
-    }
-    return shader;
-};
-
-static void draw_pixel(int* pixel_buffer, int x, int y, t_shader shader, 
-                       t_texture_map* tex_map, t_loaded_texture* tex_ptr){
-    // Index for pixelbuffer
-    int i = (int)tex_map->y * tex_ptr->width + (int)tex_map->x;
-    clip(&i, 0, tex_ptr->height * tex_ptr->width-1);  
-
-    int r = tex_ptr->texture[4*i  ] + shader.color.r;
-    int g = tex_ptr->texture[4*i+1] + shader.color.g;
-    int b = tex_ptr->texture[4*i+2] + shader.color.b;
-    int a = tex_ptr->texture[4*i+3] + shader.color.a;
-
-    // Set pixel value in pixelbuffer
-    pixel_buffer[PIXEL(x, y)] = rgba(
-        clip(&r, 0, 255) * shader.scale, 
-        clip(&g, 0, 255) * shader.scale, 
-        clip(&b, 0, 255) * shader.scale, 
-        a
-    );
-};
-
-static void draw_vline(int* pixel_buffer, int x, int y1, int y2, t_shader shader, 
-                       t_texture_map* texmap, t_loaded_texture* tex_ptr){
-    for(int y = y1; y <= y2; y++){
-        draw_pixel(pixel_buffer, x, y, shader, texmap, tex_ptr);
-        increment_texmap(texmap);
-    }
-}
-
 void draw_walls(int* pixel_buffer, int x, int y1, int y2, int wall_height, t_rayhit hit){
 
     // Set calculate rgb values
@@ -250,3 +202,58 @@ void draw_foundation(int* pixel_buffer, int x, int y1, int y2, vec2 sender, doub
     }
 }
 
+static void draw_pixel(int* pixel_buffer, int x, int y, t_shader shader, 
+                       t_texture_map* tex_map, t_loaded_texture* tex_ptr){
+    // Index for pixelbuffer
+    int i = (int)tex_map->y * tex_ptr->width + (int)tex_map->x;
+    clip(&i, 0, tex_ptr->height * tex_ptr->width-1);  
+
+    int r = tex_ptr->texture[4*i  ] + shader.color.r;
+    int g = tex_ptr->texture[4*i+1] + shader.color.g;
+    int b = tex_ptr->texture[4*i+2] + shader.color.b;
+    int a = tex_ptr->texture[4*i+3] + shader.color.a;
+
+    // Set pixel value in pixelbuffer
+    pixel_buffer[PIXEL(x, y)] = rgba(
+        clip(&r, 0, 255) * shader.scale, 
+        clip(&g, 0, 255) * shader.scale, 
+        clip(&b, 0, 255) * shader.scale, 
+        a
+    );
+};
+
+static void draw_vline(int* pixel_buffer, int x, int y1, int y2, t_shader shader, 
+                       t_texture_map* texmap, t_loaded_texture* tex_ptr){
+    for(int y = y1; y <= y2; y++){
+        draw_pixel(pixel_buffer, x, y, shader, texmap, tex_ptr);
+        texmap->y += texmap->y_step;
+    }
+}
+
+static t_texture_map gen_texmap(t_loaded_texture* tex_ptr, vec2 ray, t_rayface facing, 
+                                bool is_vertical, double wall_height, double y_offset){
+    t_texture_map texmap;
+    texmap.x = (int)(tex_ptr->width * ((int)(is_vertical ? ray.y: ray.x) % G_BLOCK_SIZE) / G_BLOCK_SIZE);
+    
+    if((facing.down && !is_vertical) || (facing.left && is_vertical))
+        texmap.x = tex_ptr->width-1 - texmap.x;
+    
+    texmap.y_step = (double)tex_ptr->height / wall_height;
+    texmap.y = y_offset*texmap.y_step;
+    
+    return texmap;
+};
+
+static t_shader shade(t_material* mat, double dist, bool is_wall, bool is_vertical){
+    // double fog_effect = 1 - (MIN(dist*dist/G_BLOCK_SIZE, G_FOG_DIST)) / G_FOG_DIST;
+    
+    t_shader shader = { { 0, 0, 0, 255 }, 1 };
+    // shader.scale = fog_effect;
+    
+    if(is_wall){
+        shader.color.r = mat->highlight*is_vertical;
+        shader.color.g = mat->highlight*is_vertical;
+        shader.color.b = mat->highlight*is_vertical;
+    }
+    return shader;
+};
