@@ -5,11 +5,6 @@
 
 #define PIXEL(x, y) (y * G_SCREEN_WIDTH) + x
 
-uint32_t rgba(int r, int g, int b, int a){
-    // x & 255 limit to 255
-    return ((a & 255) << 24) + ((b & 255) << 16) + ((g & 255) << 8) + (r & 255);
-}
-
 typedef struct s_shader { 
     struct { int r, g, b, a; } color; 
     double scale; 
@@ -32,6 +27,11 @@ static t_texture_map gen_texmap(t_loaded_texture* tex_ptr, vec2 ray, t_rayface f
 
 static t_shader shade(t_material* mat, double dist, bool is_wall, bool is_vertical);
 
+
+uint32_t rgba(int r, int g, int b, int a){
+    // x & 255 limit to 255
+    return ((a & 255) << 24) + ((b & 255) << 16) + ((g & 255) << 8) + (r & 255);
+}
 
 t_rayhit raycast(vec2 sender, vec2_i index, double angle, 
                  t_level* level, t_material** mat_register){
